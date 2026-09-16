@@ -1,0 +1,2 @@
+numpy>=1.26,<3
+# neurons_csv.py additionally needs pyarrow to read the MaleCNS annotation table.
