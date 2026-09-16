@@ -1,7 +1,7 @@
 [project]
 name = "esp32-ai"
 version = "0.1.0"
-description = "Memory-efficient PLE model runtime and firmware for ESP32-S3 microcontrollers"
+description = "Memory-efficient PLE model runtime and firmware for ESP32-S3 microcontrollers, plus a fruit fly connectome port"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

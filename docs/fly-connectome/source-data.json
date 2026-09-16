@@ -1,0 +1,47 @@
+{
+  "dataset": "male-cns:v1.0",
+  "license": "CC-BY-4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "dataset_url": "https://male-cns.janelia.org/",
+  "download_url": "https://male-cns.janelia.org/download/",
+  "paper_doi": "10.1016/j.cell.2026.08.015",
+  "source_files": [
+    {
+      "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+      "bytes": 14483314,
+      "md5_base64": "UKdxh3DFciDxYLpPQxq4ng==",
+      "sha256": "2177e246113e4cfbf1e7772ec37c6da1955ff22e8063d0b1f833101f99a9a3b2",
+      "gcs_generation": "1780494878811468",
+      "name": "body-annotations-male-cns-v1.0-minconf-0.5.feather",
+      "used_for_graph_selection_or_weights": true
+    },
+    {
+      "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-neurotransmitters-male-cns-v1.0.feather",
+      "bytes": 43282834,
+      "md5_base64": "PYQrEv5cSe763lKNfdJKHw==",
+      "sha256": "95c9289220663abeb3409f3ad9e5a7f8a53f8093f5139d15502cd08da8879621",
+      "gcs_generation": "1780894899156750",
+      "name": "body-neurotransmitters-male-cns-v1.0.feather",
+      "used_for_graph_selection_or_weights": false
+    },
+    {
+      "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+      "bytes": 1051241946,
+      "md5_base64": "8w6dzKJc/QIb8eez2XVZng==",
+      "sha256": "e35da783d1c686b2b58b3b87cd6a403ae43bfcfba8bff28e08ef752c1a56afc1",
+      "gcs_generation": "1780494887545976",
+      "name": "connectome-weights-male-cns-v1.0-minconf-0.5.feather",
+      "used_for_graph_selection_or_weights": true
+    },
+    {
+      "url": "https://storage.googleapis.com/flyem-male-cns/v1.0/connectome-data/flat-connectome/body-stats-male-cns-v1.0-minconf-0.5.feather",
+      "bytes": 778062826,
+      "md5_base64": "QEwzScKFgBSOFoFeuZ84Kg==",
+      "sha256": "ca5dc83a26382ae70c8d8f42fc09ce2dbc1af7c03f3a001a1936b5e142540647",
+      "gcs_generation": "1780494888472305",
+      "name": "body-stats-male-cns-v1.0-minconf-0.5.feather",
+      "used_for_graph_selection_or_weights": false
+    }
+  ],
+  "imported_data_downloaded_at": "2026-09-11T10:32:28.307165+00:00"
+}
