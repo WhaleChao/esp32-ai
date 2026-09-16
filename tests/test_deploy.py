@@ -69,7 +69,7 @@ class DeployHarness(unittest.TestCase):
         os.chmod(self.repo / "scripts" / "deploy.sh", 0o755)
 
         # Only the paths deploy.sh reads have to exist.
-        for sketch in ("esp32_tinystories", "esp32_barista"):
+        for sketch in ("esp32_tinystories", "esp32_barista", "esp32_fly"):
             d = self.repo / "firmware" / sketch / "tools"
             d.mkdir(parents=True)
             (self.repo / "firmware" / sketch / "generated").mkdir()
@@ -353,6 +353,110 @@ class NoBoardNoRun(DeployHarness):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no /dev/cu.usbmodem*", r.stderr)
         self.assertEqual(self.calls(), [])
+
+
+FLY_FILES = ["connectome.fcl", "gold-device-order.bin", "escape-circuit.json",
+             "escape-gold.bin", "neurons.csv", "model_bundle.json"]
+
+
+class FlyUsesTheSameFlow(DeployHarness):
+    """fly is one more model name: same argument rules, same order, its own
+    bundle check, gold gate, partition offset and build flags."""
+
+    def setUp(self):
+        super().setUp()
+        self.artifacts("fly", FLY_FILES)
+        self.artifacts("barista", ["model.bin", "tokenizer.json",
+                                   "vocab.json", "layout.json"])
+
+    def test_usage_names_fly(self):
+        self.assertIn("fly", self.run_deploy().stderr)
+
+    def test_options_are_not_accepted(self):
+        r = self.run_deploy("fly", "--build-only")
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_every_missing_bundle_file_is_named(self):
+        (self.repo / "artifacts" / "fly" / "escape-gold.bin").unlink()
+        (self.repo / "artifacts" / "fly" / "model_bundle.json").unlink()
+        r = self.run_deploy("fly")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("escape-gold.bin", r.stderr)
+        self.assertIn("model_bundle.json", r.stderr)
+        self.assertIn("fetch_model.sh fly", r.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_fly_uses_its_own_sketch_and_tools(self):
+        self.assertEqual(self.run_deploy("fly").returncode, 0, self.run_deploy("fly").stderr)
+        joined = "\n".join(self.calls())
+        self.assertIn("esp32_fly/tools/prepare_assets.py", joined)
+        self.assertIn("esp32_fly/tools/verify.py host", joined)
+        self.assertIn("firmware/esp32_fly", joined)
+        self.assertNotIn("esp32_barista", joined)
+        self.assertNotIn("esp32_tinystories", joined)
+
+    def test_the_language_model_gates_do_not_run(self):
+        self.assertEqual(self.run_deploy("fly").returncode, 0)
+        self.assertEqual([c for c in self.calls() if c.startswith("cc ")], [])
+
+    def test_the_graph_is_written_to_its_own_partition(self):
+        self.assertEqual(self.run_deploy("fly").returncode, 0)
+        flash = [c for c in self.calls() if "write_flash" in c]
+        self.assertEqual(len(flash), 1)
+        self.assertIn("0x210000 artifacts/fly/connectome.fcl", flash[0])
+
+    def test_language_models_keep_their_offset(self):
+        self.assertEqual(self.run_deploy("barista").returncode, 0)
+        flash = [c for c in self.calls() if "write_flash" in c]
+        self.assertIn("0x110000", flash[0])
+
+    def test_build_flags_are_fly_only(self):
+        self.assertEqual(self.run_deploy("fly").returncode, 0)
+        fly_compile = next(c for c in self.calls() if c.startswith("arduino-cli compile"))
+        self.assertIn("-ffp-contract=off", fly_compile)
+        self.assertIn("upload.maximum_size=2097152", fly_compile)
+        self.log.unlink()
+        self.assertEqual(self.run_deploy("barista").returncode, 0)
+        barista_compile = next(c for c in self.calls() if c.startswith("arduino-cli compile"))
+        self.assertNotIn("-ffp-contract=off", barista_compile)
+        self.assertNotIn("upload.maximum_size", barista_compile)
+
+    def test_gold_precedes_compile_and_compile_precedes_writes(self):
+        self.assertEqual(self.run_deploy("fly").returncode, 0)
+        gold_at = self.index_of("verify.py host")
+        compile_at = self.index_of("arduino-cli compile")
+        self.assertNotEqual(gold_at, -1)
+        self.assertLess(self.index_of("prepare_assets.py"), gold_at)
+        self.assertLess(gold_at, compile_at)
+        self.assertLess(compile_at, self.index_of("write_flash"))
+        self.assertLess(self.index_of("write_flash"), self.index_of("arduino-cli upload"))
+
+    def test_a_failed_gold_gate_stops_before_compiling(self):
+        failing = STUB.format(
+            name="uv", body='case "$*" in *verify.py*) echo "FAIL: gold" >&2; exit 1;; esac\necho PASS')
+        (self.bin / "uv").write_text(failing)
+        os.chmod(self.bin / "uv", 0o755)
+        r = self.run_deploy("fly")
+        self.assertNotEqual(r.returncode, 0)
+        joined = "\n".join(self.calls())
+        self.assertNotIn("arduino-cli compile", joined)
+        self.assertNotIn("write_flash", joined)
+
+    def test_a_selected_manifest_reaches_both_checks(self):
+        self.assertEqual(self.run_deploy("fly", MANIFEST="reviewed.json").returncode, 0)
+        checks = [c for c in self.uv_calls() if "prepare_assets.py" in c or "verify.py" in c]
+        self.assertEqual(len(checks), 2)
+        for c in checks:
+            self.assertIn("--manifest reviewed.json", c)
+
+    def test_tools_run_outside_the_project_without_extra_packages(self):
+        self.assertEqual(self.run_deploy("fly").returncode, 0)
+        calls = self.uv_calls()
+        self.assertEqual(len(calls), 2)
+        for c in calls:
+            self.assertIn("--no-project", c)
+            self.assertNotIn("--with", c)
 
 
 if __name__ == "__main__":

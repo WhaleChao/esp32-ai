@@ -14,7 +14,7 @@ cd "$ROOT"
 
 usage() {
   cat >&2 <<'EOF'
-usage: scripts/fetch_model.sh <tinystories|barista>
+usage: scripts/fetch_model.sh <tinystories|barista|fly>
 
 Downloads that model's released files. The inference assets are checked against
 a SHA-256 and byte size pinned in this script; metadata.json carries no pinned
@@ -25,7 +25,7 @@ Nothing is installed unless every check passes, so a failed or partial download
 leaves whatever is already in artifacts/ untouched.
 
 Then flash with:
-  scripts/deploy.sh <tinystories|barista>
+  scripts/deploy.sh <tinystories|barista|fly>
 EOF
   exit 2
 }
@@ -53,6 +53,22 @@ case "$MODEL_KIND" in
       "tokenizer.json 0ad085811c949f35c5f5f15b555f2ff2d46ec1ec94a1650552416d06aaa19ee2 491735"
       "vocab.json 5a16d6224abf03265d69ebcccf121c8f8d2c222bfedd8274acbc0bbbe13e4eb7 50494"
       "layout.json 15036c5ee2b23b9b35404ef6422cb788bbede8cf2c269bae35d4dbf9a48a0b90 5142"
+    )
+    ;;
+  fly)
+    # The graph and the escape circuit run on the board. Both gold files come
+    # along because deploy.sh checks the host runtime against them before
+    # compiling, and neurons.csv names every neuron the circuit refers to.
+    # model_bundle.json binds the five of them together; deploy.sh refuses to
+    # build without it.
+    REPO=slvDev/esp32-ai-fly
+    PINNED=(
+      "model_bundle.json 03ca22f539a0e71033d0f8e4c1f72e275573c8c9c1dc41c7895892f0d35c43d5 2003"
+      "connectome.fcl 1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f 14174411"
+      "gold-device-order.bin 9e98ce8294f1a03ce3665f7f651be487f320c66ddf80f6067cf8b37388b9a9bb 75365188"
+      "escape-circuit.json f3d60b01f24af16faec0ac7ce6c7d011c336f19f1707f9bd2279ea92a77240fe 38536"
+      "escape-gold.bin 0990325f0d90035b469e13218edf56631884809199276490ca3516b61837d056 4832"
+      "neurons.csv 348e54b2a1c94b8387263c7af82ff41e8518be5fd662aed62bc28ebf281c3703 2132569"
     )
     ;;
   *)
@@ -114,7 +130,7 @@ for entry in "${PINNED[@]}"; do
     echo "  $name sha256 $got_sha, expected $want_sha" >&2
     failed=1
   else
-    printf "  %-16s ok  %s B\n" "$name" "$got_bytes"
+    printf "  %-21s ok  %s B\n" "$name" "$got_bytes"
   fi
 done
 
@@ -140,7 +156,7 @@ PY
   then
     failed=1
   else
-    echo "  metadata.json  ok  agrees with the pinned values"
+    echo "  metadata.json          ok  agrees with the pinned values"
   fi
 else
   echo "  metadata.json MISSING from the download" >&2

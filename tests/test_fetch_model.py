@@ -258,7 +258,33 @@ class TestPinnedReleaseValues(unittest.TestCase):
                 self.assertRegex(sha, r"^[0-9a-f]{64}$")
                 self.assertTrue(size.isdigit() and int(size) > 0)
                 found += 1
-        self.assertGreaterEqual(found, 6)   # 2 tinystories + 4 barista
+        self.assertGreaterEqual(found, 12)   # 2 tinystories + 4 barista + 6 fly
+
+
+class TestFly(FetchCase):
+    """fly goes through the same pinned download, one argument and all."""
+    MODEL = "fly"
+
+    def test_the_bundle_is_installed_under_artifacts_fly(self):
+        files = {"connectome.fcl": b"graph", "escape-circuit.json": b"{}",
+                 "neurons.csv": b"execution_index\n"}
+        self.publish(files)
+        r = self.run_fetch("fly")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for name in (*files, "metadata.json"):
+            with self.subTest(name=name):
+                self.assertTrue((self.root / "artifacts" / "fly" / name).is_file())
+        self.assertIn("scripts/deploy.sh fly", r.stdout)
+
+    def test_a_wrong_graph_is_refused(self):
+        self.publish({"connectome.fcl": b"graph"}, pins={"connectome.fcl": b"grapH"})
+        r = self.run_fetch("fly")
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse(self.dest().exists())
+
+    def test_options_are_not_accepted(self):
+        self.publish({"connectome.fcl": b"graph"})
+        self.assertEqual(self.run_fetch("fly", "--from", "somewhere").returncode, 2)
 
 
 if __name__ == "__main__":
