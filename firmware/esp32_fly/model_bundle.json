@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "bundle_id": "fly-escape-v1",
+  "contract": "fly-escape-v1",
+  "files": {
+    "graph": {
+      "name": "connectome.fcl",
+      "bytes": 14174411,
+      "sha256": "1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f"
+    },
+    "graph_gold": {
+      "name": "gold-device-order.bin",
+      "bytes": 75365188,
+      "sha256": "9e98ce8294f1a03ce3665f7f651be487f320c66ddf80f6067cf8b37388b9a9bb"
+    },
+    "circuit": {
+      "name": "escape-circuit.json",
+      "bytes": 38536,
+      "sha256": "f3d60b01f24af16faec0ac7ce6c7d011c336f19f1707f9bd2279ea92a77240fe"
+    },
+    "escape_gold": {
+      "name": "escape-gold.bin",
+      "bytes": 4832,
+      "sha256": "0990325f0d90035b469e13218edf56631884809199276490ca3516b61837d056"
+    },
+    "neurons": {
+      "name": "neurons.csv",
+      "bytes": 2132569,
+      "sha256": "348e54b2a1c94b8387263c7af82ff41e8518be5fd662aed62bc28ebf281c3703"
+    }
+  },
+  "graph": {
+    "nodes": 48311,
+    "edges": 9462135,
+    "block_rows": 32,
+    "order_sha256": "c32ecbaed8e8b4e78bed11901a48b02d6b231a158ab9335906a87ab200227e99"
+  },
+  "circuit": {
+    "graph_sha256": "1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f",
+    "order_sha256": "c32ecbaed8e8b4e78bed11901a48b02d6b231a158ab9335906a87ab200227e99",
+    "inputs": {
+      "L": 165,
+      "R": 146
+    },
+    "outputs": {
+      "L": 4,
+      "R": 4
+    }
+  },
+  "gold": {
+    "graph": {
+      "graph_sha256": "1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f",
+      "order_sha256": "c32ecbaed8e8b4e78bed11901a48b02d6b231a158ab9335906a87ab200227e99",
+      "cases": 6,
+      "steps": 32,
+      "atol": 3e-05,
+      "rtol": 0.0003
+    },
+    "escape": {
+      "circuit_sha256": "f3d60b01f24af16faec0ac7ce6c7d011c336f19f1707f9bd2279ea92a77240fe",
+      "graph_sha256": "1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f",
+      "cases": 5,
+      "steps": 24,
+      "outputs": 8,
+      "atol": 3e-05,
+      "rtol": 0.0003
+    }
+  }
+}

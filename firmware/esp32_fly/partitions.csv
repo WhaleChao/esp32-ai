@@ -1,0 +1,7 @@
+# ESP32-S3, 16 MiB Flash.
+# The application includes the escape circuit; flymodel holds the compressed graph.
+# Name,    Type, SubType, Offset,   Size,     Flags
+nvs,       data, nvs,     0x9000,   0x5000,
+factory,   app,  factory, 0x10000,  0x200000,
+flymodel,  data, 0x40,    0x210000, 0xDE0000,
+coredump,  data, coredump,0xFF0000, 0x10000,
