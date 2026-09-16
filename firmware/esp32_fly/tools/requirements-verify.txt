@@ -1,0 +1,2 @@
+# Serial verification only. Host verification uses Python's standard library.
+pyserial==3.5
