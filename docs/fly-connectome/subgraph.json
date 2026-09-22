@@ -69,5 +69,7 @@
     "all_topology_equal": true,
     "all_contact_counts_equal": true
   },
-  "neuron_map_sha256": "081959b8d1160ff45c4ce23107f91038cd6a3e13484f839a117ff59210afd43c"
+  "neuron_map_sha256": "348e54b2a1c94b8387263c7af82ff41e8518be5fd662aed62bc28ebf281c3703",
+  "neuron_map_note": "neuron_map_sha256 identifies the distributed annotated neurons.csv. previously_recorded_neuron_map_sha256 preserves the old metadata value; its matching map is not distributed in this package.",
+  "previously_recorded_neuron_map_sha256": "081959b8d1160ff45c4ce23107f91038cd6a3e13484f839a117ff59210afd43c"
 }

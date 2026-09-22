@@ -63,10 +63,10 @@ case "$MODEL_KIND" in
     # build without it.
     REPO=slvDev/esp32-ai-fly
     PINNED=(
-      "model_bundle.json 03ca22f539a0e71033d0f8e4c1f72e275573c8c9c1dc41c7895892f0d35c43d5 2003"
+      "model_bundle.json 3b55f468f48e67ebf0866a52432a8981f1f782fcf4e69dbbdc98fe8c736eab3a 2003"
       "connectome.fcl 1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f 14174411"
       "gold-device-order.bin 9e98ce8294f1a03ce3665f7f651be487f320c66ddf80f6067cf8b37388b9a9bb 75365188"
-      "escape-circuit.json f3d60b01f24af16faec0ac7ce6c7d011c336f19f1707f9bd2279ea92a77240fe 38536"
+      "escape-circuit.json 566df28669c4b6ae5fff4a2330558837bce0c2a4fb08eb9edec4193285f3a91d 38724"
       "escape-gold.bin 0990325f0d90035b469e13218edf56631884809199276490ca3516b61837d056 4832"
       "neurons.csv 348e54b2a1c94b8387263c7af82ff41e8518be5fd662aed62bc28ebf281c3703 2132569"
     )

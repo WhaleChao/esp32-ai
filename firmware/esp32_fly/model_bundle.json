@@ -15,8 +15,8 @@
     },
     "circuit": {
       "name": "escape-circuit.json",
-      "bytes": 38536,
-      "sha256": "f3d60b01f24af16faec0ac7ce6c7d011c336f19f1707f9bd2279ea92a77240fe"
+      "bytes": 38724,
+      "sha256": "566df28669c4b6ae5fff4a2330558837bce0c2a4fb08eb9edec4193285f3a91d"
     },
     "escape_gold": {
       "name": "escape-gold.bin",
@@ -57,7 +57,7 @@
       "rtol": 0.0003
     },
     "escape": {
-      "circuit_sha256": "f3d60b01f24af16faec0ac7ce6c7d011c336f19f1707f9bd2279ea92a77240fe",
+      "circuit_sha256": "566df28669c4b6ae5fff4a2330558837bce0c2a4fb08eb9edec4193285f3a91d",
       "graph_sha256": "1e35e6ba658986de5e3163ea49b600378a2e3daa64700b8b619c4f21cc0a6e1f",
       "cases": 5,
       "steps": 24,
