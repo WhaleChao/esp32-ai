@@ -341,6 +341,34 @@ class RunsDoNotShareAWorkspace(DeployHarness):
             self.assertFalse(Path(p).exists(), f"{p} outlived the run")
 
 
+class OneRunPerSketch(DeployHarness):
+    def setUp(self):
+        super().setUp()
+        self.artifacts("barista", ["model.bin", "tokenizer.json",
+                                   "vocab.json", "layout.json"])
+        self.lock = self.repo / "firmware" / "esp32_barista" / "generated" / ".deploy-lock"
+
+    def test_a_running_deploy_blocks_another(self):
+        self.lock.mkdir()
+        r = self.run_deploy("barista")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("another deploy", r.stderr)
+        self.assertEqual(self.uv_calls(), [], "headers were generated under a running deploy")
+        self.assertTrue(self.lock.exists(), "the blocked run removed the other run's lock")
+
+    def test_the_lock_is_released_afterwards(self):
+        self.assertEqual(self.run_deploy("barista").returncode, 0)
+        self.assertFalse(self.lock.exists())
+        self.assertEqual(self.run_deploy("barista").returncode, 0)
+
+    def test_the_lock_is_released_after_a_failure(self):
+        (self.bin / "arduino-cli").write_text(STUB.format(
+            name="arduino-cli", body='if [ "$1" = "compile" ]; then exit 1; fi'))
+        os.chmod(self.bin / "arduino-cli", 0o755)
+        self.assertNotEqual(self.run_deploy("barista").returncode, 0)
+        self.assertFalse(self.lock.exists())
+
+
 class NoBoardNoRun(DeployHarness):
     def test_a_missing_port_stops_before_generating(self):
         # Stub auto-detection so the test is independent of connected hardware.

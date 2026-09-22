@@ -223,13 +223,24 @@ if [ "$missing" -ne 0 ]; then
   exit 1
 fi
 
+# Headers are generated inside the sketch, and the host gates between generating
+# and compiling take minutes, so a second run of the same sketch could replace
+# them before the first one compiles. One run per sketch at a time.
+mkdir -p "$SKETCH/generated"
+LOCK="$SKETCH/generated/.deploy-lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "another deploy of $SKETCH is running; if none is, remove $LOCK" >&2
+  exit 1
+fi
+trap 'rmdir -- "$LOCK"' EXIT
+
 prepare_headers
 
 CFLAGS='-O3 -Wall -Wextra'
 # One workspace per run, holding the host gate binaries and the firmware build.
 # A shared path lets two concurrent deployments compile over each other.
 RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/esp32ai-deploy-XXXXXX")
-trap 'rm -rf -- "$RUN_DIR"' EXIT
+trap 'rm -rf -- "$RUN_DIR"; rmdir -- "$LOCK"' EXIT
 GATE_DIR="$RUN_DIR/gates"
 BUILD_DIR="$RUN_DIR/build"
 mkdir -p "$GATE_DIR" "$BUILD_DIR"
