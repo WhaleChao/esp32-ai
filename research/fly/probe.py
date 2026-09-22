@@ -183,9 +183,9 @@ def laterality(stimuli, members, results, control_finals):
             difference = lambda finals: finals[:, lc].mean(axis=1) - finals[:, rc].mean(axis=1)
             null = difference(control_finals[name]) - difference(control_finals[f'{pair}_R'])
             separation = (left[f'{t}_L']['final'] - left[f'{t}_R']['final']) - (right[f'{t}_L']['final'] - right[f'{t}_R']['final'])
-            spread = float(null.std())
-            output[pair][t] = dict(separation=separation, null_sd=spread,
-                                   z=separation / spread if spread > 0 else None)
+            centre, spread = float(null.mean()), float(null.std())
+            output[pair][t] = dict(separation=separation, null_mean=centre, null_sd=spread,
+                                   z=(separation - centre) / spread if spread > 0 else None)
     return output
 
 

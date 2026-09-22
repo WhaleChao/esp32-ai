@@ -106,7 +106,17 @@ class ProbeTests(unittest.TestCase):
         lateral = self.run_probe()['laterality']['loom']['DNp01']
         self.assertGreater(lateral['separation'], 0.4)
         self.assertGreater(lateral['null_sd'], 0)
-        self.assertAlmostEqual(lateral['z'], lateral['separation'] / lateral['null_sd'])
+        self.assertAlmostEqual(lateral['z'], (lateral['separation'] - lateral['null_mean']) / lateral['null_sd'])
+
+    def test_laterality_is_zero_when_controls_separate_as_much(self):
+        # Controls that separate the sides exactly as much as the stimulus give no evidence.
+        pairs = {'x_L': np.array([[0.3, 0.1]] * 4), 'x_R': np.array([[0.1, 0.3], [0.2, 0.2], [0.1, 0.3], [0.2, 0.2]])}
+        members = {'t_L': [0], 't_R': [1]}
+        results = {'stimuli': {'x_L': {'watched': {'t_L': {'final': 0.35}, 't_R': {'final': 0.1}}},
+                               'x_R': {'watched': {'t_L': {'final': 0.15}, 't_R': {'final': 0.2}}}}}
+        row = probe.laterality(pairs, members, results, pairs)['x']['t']
+        self.assertAlmostEqual(row['null_mean'], row['separation'])
+        self.assertAlmostEqual(row['z'], 0)
 
     def test_results_are_deterministic_and_follow_the_seed(self):
         self.assertEqual(self.run_probe(), self.run_probe())
