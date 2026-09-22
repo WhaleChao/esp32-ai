@@ -26,11 +26,13 @@ cannot silently approve a replacement. `--manifest PATH` explicitly chooses a
 different trusted manifest, for example one reviewed after exporting a new
 circuit. There is no signature verification or online trust service in this tool.
 
-Manifest schema 2 records each role's basename, byte count and SHA-256, the graph
+Manifest schema 2 records each role's file name, byte count and SHA-256, the graph
 shape and node-order SHA-256, the number of circuit inputs and outputs per side,
 and both gold records. The circuit and both gold records are bound to the graph
 SHA-256; the escape gold is also bound to the circuit SHA-256. Unknown schemas,
-contracts and unsupported shapes are rejected.
+contracts and unsupported shapes are rejected. File names are fixed to the ones
+in the table above, because `fetch_model.sh` installs and `deploy.sh` flashes
+those names; a manifest naming other files is rejected.
 
 `prepare_assets.py --bundle DIR` checks all five files: hashes, graph framing and
 order, the circuit map, that `neurons.csv` follows the graph's node order and

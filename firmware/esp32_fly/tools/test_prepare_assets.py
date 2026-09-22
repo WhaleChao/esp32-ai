@@ -157,6 +157,7 @@ class BundleTests(unittest.TestCase):
             (('gold', 'escape', 'graph_sha256'), '0'*64), (('gold', 'escape', 'outputs'), 3),
             (('circuit', 'inputs', 'L'), 0), (('circuit', 'outputs', 'R'), 65), (('circuit', 'inputs', 'R'), True),
             (('files', 'graph', 'name'), '../escape'), (('files', 'graph', 'name'), 'neurons.csv'),
+            (('files', 'graph', 'name'), 'other-graph.fcl'), (('files', 'neurons', 'name'), 'cells.csv'),
             (('files', 'circuit', 'name'), 'model_bundle.json'), (('files', 'graph', 'bytes'), -1),
             (('gold', 'graph', 'atol'), float('nan')), (('gold', 'escape', 'rtol'), 0.5),
         ]

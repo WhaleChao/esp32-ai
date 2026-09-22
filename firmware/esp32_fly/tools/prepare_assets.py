@@ -22,7 +22,12 @@ SKETCH = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = SKETCH / "model_bundle.json"
 SCHEMA = 2
 CONTRACT = "fly-escape-v1"
-ROLES = {"graph", "graph_gold", "circuit", "escape_gold", "neurons"}
+# deploy.sh and fetch_model.sh address the bundle by these names, so a manifest
+# that names other files would be checked against one file and flash another.
+FILE_NAMES = {"graph": "connectome.fcl", "graph_gold": "gold-device-order.bin",
+              "circuit": "escape-circuit.json", "escape_gold": "escape-gold.bin",
+              "neurons": "neurons.csv"}
+ROLES = set(FILE_NAMES)
 SIDES = ("L", "R")
 KINDS = ("inputs", "outputs")
 MAX_PER_SIDE = {"inputs": 1024, "outputs": 64}
@@ -82,14 +87,9 @@ def check_manifest(manifest):
     require(isinstance(manifest["bundle_id"], str) and manifest["bundle_id"], "Missing bundle ID")
     files = mapping(manifest["files"], "files")
     require(set(files) == ROLES, "Manifest must describe graph, graph_gold, circuit, escape_gold and neurons")
-    names = set()
     for role, entry in files.items():
         mapping(entry, f"files.{role}")
-        name = entry["name"]
-        require(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name),
-                f"{role}: file name must be a plain basename")
-        require(name not in names and name != "model_bundle.json", "Duplicate or reserved file name")
-        names.add(name)
+        require(entry["name"] == FILE_NAMES[role], f"{role}: file must be named {FILE_NAMES[role]}")
         require(is_int(entry["bytes"]) and 0 < entry["bytes"] <= 256 * 1024 * 1024, f"{role}: invalid byte size")
         require(is_hash(entry["sha256"]), f"{role}: invalid SHA-256")
     graph, circuit, gold = (mapping(manifest[key], key) for key in ("graph", "circuit", "gold"))
