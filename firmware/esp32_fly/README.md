@@ -90,9 +90,9 @@ facing, not on which half of the screen it is in. Between the bars is the count
 of escapes and catches.
 
 Below the line the fly walks around, wings fluttering, and the spider creeps in
-from an edge. When the fly escapes it jumps sideways with a short trail, and the
-spider walks off screen. If the spider reaches the fly first, the catch counter
-goes up and the fly reappears elsewhere.
+from an edge. When the fly escapes it jumps sideways, away from where it saw the
+spider, with a short trail, and the spider walks off screen. If the spider
+reaches the fly first, the catch counter goes up and the fly reappears elsewhere.
 
 Physics runs at 120 Hz, the display at about 19 frames per second, and a neural
 decision arrives about every 1.7 seconds. Reactions are therefore slow on
@@ -114,8 +114,8 @@ On this board with the released bundle, checked from the host over serial:
 | decoded-block cache | 530 of 1,510 blocks, 6.1 MB of PSRAM |
 | application | 426,274 of 2,097,152 bytes |
 
-In a 20-minute simulation of the same loop on a computer, the fly escaped 48
-times and was caught 17 times across 65 spider approaches. Escape counts depend
+In a 20-minute simulation of the same loop on a computer, the fly escaped 47
+times and was caught 17 times across 64 spider approaches. Escape counts depend
 on the world's random walk and are not a quality gate. The commands that produce
 these numbers are in [VERIFICATION.md](VERIFICATION.md).
 

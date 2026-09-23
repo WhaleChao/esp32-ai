@@ -64,6 +64,19 @@ test checks those fixtures and deliberately broken hooks. Firmware boot runs the
 same test separately on each core against the real assembly function. A scalar
 host PASS does not prove SIMD execution on a board.
 
+### Escape simulation
+
+```sh
+.venv/bin/python -m research.fly.escape_sim --bundle artifacts/fly
+```
+
+Runs the demo's loop on the host with the firmware's world and the real graph in
+host mode 2: 20 minutes of world time, seed 61000 and a 1.7-second neural cycle
+by default. As on the board, each decision is applied at the end of its cycle
+against the world sampled at its start: the jump is aimed from the sampled
+heading, and only the sampled spider counts as escaped. It prints escape, catch
+and approach counts. They are observations, not a gate.
+
 ## Connected board
 
 Pass the actual serial port explicitly. Only one process may use the port;

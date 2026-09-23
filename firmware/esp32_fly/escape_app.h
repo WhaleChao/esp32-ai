@@ -116,11 +116,11 @@ static void escape_update() {
     if (!ui_active())
         return;
     uint64_t start = now();
-    float looms[2];
+    WorldSample sample;
     xSemaphoreTake(game_mutex, portMAX_DELAY);
-    world_looms(&world, looms);
-    uint64_t sample_tick = world.ticks;
+    world_sample(&world, &sample);
     xSemaphoreGive(game_mutex);
+    const float *looms = sample.looms;
     escape_encode(looms);
     uint64_t graph_start = now();
     int error = run_graph();
@@ -137,8 +137,8 @@ static void escape_update() {
         delay(1);
     xSemaphoreTake(game_mutex, portMAX_DELAY);
     bool still_active = game_active;
-    int side = still_active ? world_escape(&world, drives[0], drives[1], escape_threshold) : -1;
-    memcpy(last_looms, looms, sizeof(looms));
+    int side = still_active ? world_escape(&world, &sample, drives[0], drives[1], escape_threshold) : -1;
+    memcpy(last_looms, looms, sizeof(last_looms));
     memcpy(last_drives, drives, sizeof(drives));
     uint32_t escapes = world.escapes, caught = world.caught, encounters = world.encounters;
     xSemaphoreGive(game_mutex);
@@ -152,7 +152,7 @@ static void escape_update() {
     memcpy(bits, looms, sizeof(bits));
     int head = snprintf(line, sizeof(line),
                         "{\"event\":\"escape_step\",\"step\":%u,\"sample_tick\":%llu,\"loom_bits\":[%u,%u],",
-                        (unsigned)neural_steps, (unsigned long long)sample_tick, (unsigned)bits[0],
+                        (unsigned)neural_steps, (unsigned long long)sample.tick, (unsigned)bits[0],
                         (unsigned)bits[1]);
     size_t used = head < 0 ? sizeof(line) : (size_t)head;
     if (used < sizeof(line))

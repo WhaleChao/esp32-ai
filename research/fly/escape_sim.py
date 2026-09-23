@@ -4,7 +4,8 @@ Runs the board's loop: at the start of each neural cycle the world is sampled,
 the spider's loom levels drive the circuit's looming inputs, the graph takes one
 step and the escape neurons' mean activity per side decides an escape. The
 decision is applied when the cycle ends, while the world keeps moving at 120 Hz
-in between, as on the board. Nothing is trained.
+in between, as on the board: the jump is aimed from the fly's sampled heading and
+only the sampled spider counts as escaped. Nothing is trained.
 
   python3 -m research.fly.escape_sim --bundle artifacts/fly --minutes 20 --seeds 61000 61001
 """
@@ -59,7 +60,7 @@ def world_library(directory, defines=()):
     lib.escape_world_create.restype = ct.c_void_p
     lib.escape_world_destroy.argtypes = [ct.c_void_p]
     lib.escape_world_advance.argtypes = [ct.c_void_p, ct.c_uint32]
-    lib.escape_world_looms.argtypes = [ct.c_void_p, ct.POINTER(ct.c_float)]
+    lib.escape_world_sample.argtypes = [ct.c_void_p, ct.POINTER(ct.c_float)]
     lib.escape_world_decide.argtypes = [ct.c_void_p, ct.c_float, ct.c_float, ct.c_float]
     lib.escape_world_decide.restype = ct.c_int
     lib.escape_world_stats.argtypes = [ct.c_void_p, ct.POINTER(ct.c_uint32)]
@@ -91,7 +92,7 @@ def session(model, lib, circuit, seed, minutes, cycle_seconds, mode):
         stats, positions = (ct.c_uint32 * 5)(), (ct.c_double * 5)()
         for step in range(cycles):
             looms = (ct.c_float * 2)()
-            lib.escape_world_looms(world, looms)
+            lib.escape_world_sample(world, looms)
             lib.escape_world_stats(world, stats)
             lib.escape_world_positions(world, positions)
             sample = dict(spider_state=stats[3], fly_state=stats[4], caught=stats[1],

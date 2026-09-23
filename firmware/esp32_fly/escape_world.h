@@ -9,7 +9,7 @@
 // toward it. Positions are display pixels with y pointing down, velocities are
 // pixels/second and headings are radians, where heading h moves along
 // (cos h, sin h). The brain never sees positions; it only receives the two loom
-// levels from world_looms() and answers through world_escape().
+// levels sampled by world_sample() and answers through world_escape().
 
 #define WORLD_PI 3.14159265358979323846
 #define WORLD_HZ 120
@@ -59,6 +59,17 @@ typedef struct {
     int last_escape_side;  // -1 none, 0 danger seen on the left, 1 on the right
     uint64_t ticks;
 } EscapeWorld;
+
+// What the brain saw at the start of a neural cycle. The world keeps moving while
+// the graph runs, so the decision is applied against this sample: left and right
+// are relative to the sampled heading, and only the sampled approach is escaped.
+typedef struct {
+    float looms[2];
+    double heading;
+    uint32_t encounter;  // encounters at sampling time: the number of the sampled spider
+    int approaching;     // the sampled spider was approaching
+    uint64_t tick;
+} WorldSample;
 
 // Keep the generator and draw order stable so a seed reproduces a session.
 static inline uint32_t world_random(EscapeWorld *w) {
@@ -205,21 +216,34 @@ static inline void world_looms(const EscapeWorld *w, float looms[2]) {
     looms[1] = (float)(level * right);
 }
 
-// Apply one neural decision. drive_left/right are the mean escape-neuron states
-// for each side. An escape turns the fly 90 degrees away from the side with the
-// larger drive and jumps. The spider gives up. Returns the side the danger was
-// seen on, or -1 when there is no escape.
-static inline int world_escape(EscapeWorld *w, float drive_left, float drive_right, float threshold) {
+// Take the sample at the start of a neural cycle.
+static inline void world_sample(const EscapeWorld *w, WorldSample *s) {
+    world_looms(w, s->looms);
+    s->heading = w->fly_heading;
+    s->encounter = w->encounters;
+    s->approaching = w->spider_state == SPIDER_APPROACH;
+    s->tick = w->ticks;
+}
+
+// Apply one neural decision taken on sample s. drive_left/right are the mean
+// escape-neuron states for each side. An escape turns the fly 90 degrees from
+// the sampled heading, away from the side with the larger drive, and jumps: the
+// heading may have changed since, but the looms were split by the sampled one.
+// The sampled spider gives up and counts as escaped if it is still approaching;
+// a spider that arrived after the sample was never seen and keeps coming.
+// Returns the side the danger was seen on, or -1 when there is no escape.
+static inline int world_escape(EscapeWorld *w, const WorldSample *s, float drive_left, float drive_right,
+                               float threshold) {
     if (!(drive_left > threshold || drive_right > threshold) || w->fly_state != FLY_WALK || w->refractory > 0)
         return -1;
     int side = drive_left > drive_right ? 0 : 1;
     // Turning right is +90 degrees with y pointing down.
-    w->fly_heading = world_wrap(w->fly_heading + (side == 0 ? (WORLD_PI / 2) : -(WORLD_PI / 2)));
+    w->fly_heading = world_wrap(s->heading + (side == 0 ? (WORLD_PI / 2) : -(WORLD_PI / 2)));
     w->fly_state = FLY_JUMP;
     w->fly_timer = FLY_JUMP_SECONDS;
     w->refractory = ESCAPE_REFRACTORY_SECONDS;
     w->last_escape_side = side;
-    if (w->spider_state == SPIDER_APPROACH) {
+    if (s->approaching && w->spider_state == SPIDER_APPROACH && w->encounters == s->encounter) {
         w->escapes++;
         w->spider_state = SPIDER_RETREAT;
     }
