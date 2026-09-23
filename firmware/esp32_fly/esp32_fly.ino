@@ -57,6 +57,12 @@ static void fatal(const char *reason) {
     has_state = false;
     Serial.printf("{\"event\":\"fatal\",\"reason\":\"%s\"}\n", reason);
 }
+// Commands after a failure repeat its first reason instead of replacing it.
+static void not_ready() {
+    char reason[sizeof(game_error)];
+    ui_error_reason(reason, sizeof(reason));
+    Serial.printf("{\"event\":\"fatal\",\"reason\":\"not ready: %s\"}\n", reason[0] ? reason : "unknown");
+}
 static void info() {
     Serial.printf("{\"event\":\"info\",\"ready\":%s,\"variant\":\"escape-v1\",\"mode\":%d,"
                   "\"mapped_bytes\":%u,\"cache_staged\":%d,\"simd_selftest\":%s,\"neurons\":%u,"
@@ -342,6 +348,8 @@ void setup() {
         fatal("display task failed");
         return;
     }
+    // From here only the display task writes to the OLED.
+    display_task_running = true;
 }
 void loop() {
     static char command[64];
@@ -362,7 +370,7 @@ void loop() {
             if (!strcmp(command, "INFO"))
                 info();
             else if (!ready)
-                fatal("not ready");
+                not_ready();
             else if (!strcmp(command, "STOP")) {
                 ui_stop();
                 ui_status();

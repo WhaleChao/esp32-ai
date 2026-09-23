@@ -7,12 +7,13 @@
 #include <Adafruit_SH110X.h>
 #include "escape_world.h"
 
-// The display task owns world ticks and OLED writes after setup. The Arduino
-// loop samples loom levels and applies escape decisions while holding game_mutex.
+// The display task owns world ticks and OLED writes after setup; until it starts,
+// setup owns the OLED. The Arduino loop samples the world and applies escape
+// decisions while holding game_mutex.
 static Adafruit_SH1106G oled(128, 64, &Wire, -1);
 static SemaphoreHandle_t game_mutex;
 static EscapeWorld world;
-static bool display_present = false, game_active = false;
+static bool display_present = false, game_active = false, display_task_running = false;
 static uint8_t display_address = 0;
 static uint64_t game_epoch_us = 0;
 static uint32_t display_frames = 0, neural_steps = 0;
@@ -21,19 +22,45 @@ static float last_looms[2] = {0, 0}, last_drives[2] = {0, 0};
 static char game_error[48] = {0};
 #define UI_STATUS_BYTES 640
 
-static void ui_error(const char *reason) {
-    if (!game_mutex)
-        return;
-    xSemaphoreTake(game_mutex, portMAX_DELAY);
-    game_active = false;
-    snprintf(game_error, sizeof(game_error), "%s", reason);
-    xSemaphoreGive(game_mutex);
+// Boot failures happen before the display task exists, so setup draws them.
+static void ui_draw_boot_error(const char *reason) {
+    oled.clearDisplay();
+    oled.setTextColor(SH110X_WHITE);
+    oled.setTextSize(1);
+    oled.setCursor(34, 4);
+    oled.print("FLY ESCAPE");
+    oled.setCursor(0, 20);
+    oled.print("Boot failed:");
+    oled.setCursor(0, 32);
+    oled.print(reason);
+    oled.display();
 }
 
+// Keeps the first reason: once one failure stops the fly, later ones are consequences.
+static void ui_error(const char *reason) {
+    if (game_mutex)
+        xSemaphoreTake(game_mutex, portMAX_DELAY);
+    game_active = false;
+    if (!game_error[0])
+        snprintf(game_error, sizeof(game_error), "%s", reason);
+    if (game_mutex)
+        xSemaphoreGive(game_mutex);
+    if (display_present && !display_task_running)
+        ui_draw_boot_error(game_error);
+}
+
+// Copies the first error reason, or an empty string.
+static void ui_error_reason(char *reason, size_t size) {
+    if (game_mutex)
+        xSemaphoreTake(game_mutex, portMAX_DELAY);
+    snprintf(reason, size, "%s", game_error);
+    if (game_mutex)
+        xSemaphoreGive(game_mutex);
+}
+
+// The display comes up even without the mutex, so that failure can be shown too.
 static bool ui_begin() {
     game_mutex = xSemaphoreCreateMutex();
-    if (!game_mutex)
-        return false;
     Wire.begin(18, 46);
     Wire.setClock(400000);
     Wire.setTimeOut(50);
@@ -57,7 +84,7 @@ static bool ui_begin() {
         oled.print("Loading graph...");
         oled.display();
     }
-    return display_present;
+    return game_mutex && display_present;
 }
 static void ui_stop() {
     if (game_mutex) {
