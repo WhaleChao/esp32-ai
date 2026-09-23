@@ -12,6 +12,7 @@ generates, and puts a fake `hf` on PATH that copies a prepared directory into
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -87,8 +88,8 @@ class FetchCase(unittest.TestCase):
         target.write_text(script)
         target.chmod(0o755)
 
-    def run_fetch(self, *args):
-        env = dict(os.environ)
+    def run_fetch(self, *args, extra_env=None):
+        env = dict(os.environ, **(extra_env or {}))
         env["PATH"] = f"{self.bin}:{env['PATH']}"
         env["FAKE_HF_SRC"] = str(self.remote)
         env["TMPDIR"] = str(self.tmpdir)
@@ -206,6 +207,159 @@ class TestExistingArtifactsSurviveAFailure(FetchCase):
         after = {p.name: p.read_bytes() for p in self.dest().iterdir()}
         self.assertEqual(before, after)
         self.assertEqual(after["model.bin"], b"good weights")
+
+
+# Stands in for mv: counts calls and, on call $MV_FAIL_AT, either fails or sends
+# the script $MV_SIGNAL before moving, the way an interrupt would land. On call
+# $MV_INTERRUPT_AT it also sends INT and then moves anyway.
+FAKE_MV = """#!/usr/bin/env bash
+n=$(( $(cat "$MV_COUNT" 2>/dev/null || echo 0) + 1 ))
+echo "$n" > "$MV_COUNT"
+if [ "$n" = "${MV_INTERRUPT_AT:-0}" ]; then
+  kill -INT "$PPID"
+fi
+if [ "$n" = "${MV_FAIL_AT:-0}" ]; then
+  if [ -n "${MV_SIGNAL:-}" ]; then
+    kill -"$MV_SIGNAL" "$PPID"
+  else
+    echo "mv: injected failure" >&2
+    exit 1
+  fi
+fi
+exec "$REAL_MV" "$@"
+"""
+
+
+class TestInstallIsAllOrNothing(FetchCase):
+    """A failure while replacing an existing install puts every old file back."""
+    OLD = {"model.bin": b"old weights", "tokenizer.json": b"old tokenizer"}
+    NEW = {"model.bin": b"new weights!", "tokenizer.json": b"new tokenizer"}
+
+    def setUp(self):
+        super().setUp()
+        self.publish(self.OLD)
+        r = self.run_fetch(self.MODEL)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.before = self.snapshot()
+        self.publish(self.NEW)
+
+    def snapshot(self):
+        return {p.name: p.read_bytes() for p in self.dest().iterdir()}
+
+    def leftovers(self):
+        return sorted(self.dest().glob(".esp32ai-install-*")) + self.staging_dirs()
+
+    def run_with_mv(self, fail_at, signal=None, interrupt_at=None):
+        mv = self.bin / "mv"
+        mv.write_text(FAKE_MV)
+        mv.chmod(0o755)
+        count = self.dir / f"mv-count-{fail_at}-{signal}-{interrupt_at}"
+        env = {"MV_COUNT": str(count), "MV_FAIL_AT": str(fail_at), "REAL_MV": shutil.which("mv")}
+        if signal:
+            env["MV_SIGNAL"] = signal
+        if interrupt_at:
+            env["MV_INTERRUPT_AT"] = str(interrupt_at)
+        try:
+            return self.run_fetch(self.MODEL, extra_env=env)
+        finally:
+            mv.unlink()
+
+    def test_a_failed_rename_restores_every_old_file(self):
+        # Three names (two assets and metadata.json), each moved aside and then
+        # replaced: six renames, and a failure at each one must undo the rest.
+        for fail_at in range(1, 7):
+            with self.subTest(fail_at=fail_at):
+                r = self.run_with_mv(fail_at)
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertIn("injected failure", r.stderr)
+                self.assertIn("restored to its previous files", r.stderr)
+                self.assertEqual(self.snapshot(), self.before)
+                self.assertEqual(self.leftovers(), [])
+
+    def test_an_interrupt_mid_install_restores_every_old_file(self):
+        for signal, code in (("INT", 130), ("TERM", 143)):
+            with self.subTest(signal=signal):
+                # The signal lands during the fourth rename, with files of both
+                # releases already in place.
+                r = self.run_with_mv(4, signal)
+                self.assertEqual(r.returncode, code, r.stderr)
+                self.assertIn("restored to its previous files", r.stderr)
+                self.assertEqual(self.snapshot(), self.before)
+                self.assertEqual(self.leftovers(), [])
+
+    def test_an_interrupt_during_the_rollback_does_not_undo_it(self):
+        # Rename 4 (the new tokenizer.json) fails after model.bin was fully
+        # replaced. The rollback's own renames are 5 (tokenizer.json back) and
+        # 6 (model.bin back); Ctrl-C lands during each in turn. A second rollback
+        # would delete the model.bin the first one had just put back.
+        for interrupt_at in (5, 6):
+            with self.subTest(interrupt_at=interrupt_at):
+                r = self.run_with_mv(4, interrupt_at=interrupt_at)
+                self.assertNotEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.snapshot(), self.before)
+                self.assertIn("restored to its previous files", r.stderr)
+                self.assertEqual(self.leftovers(), [])
+
+    def test_a_second_rollback_is_harmless(self):
+        # restore() taken from the script and run twice on a replaced file: once
+        # as a repeated call, once with the once-only guard forced open, so the
+        # per-step bookkeeping is tested on its own.
+        script = (self.root / "scripts" / "fetch_model.sh").read_text()
+        start = script.index("restore() {")
+        body = script[start:script.index("\n}\n", start) + 3]
+        for second in ("restore", "INSTALLING=1; restore"):
+            with self.subTest(second=second):
+                dest = Path(tempfile.mkdtemp(dir=self.dir))
+                work = dest / ".esp32ai-install-AbC123"
+                (work / "new").mkdir(parents=True)
+                (work / "old").mkdir()
+                (dest / "model.bin").write_bytes(b"new")
+                (work / "old" / "model.bin").write_bytes(b"old")
+                driver = (f"set -euo pipefail\n{body}\n"
+                          f'DEST="{dest}"; WORK="{work}"; INSTALLING=1\n'
+                          'STEPS=("aside model.bin" "new model.bin")\n'
+                          f"restore; {second}\n")
+                r = subprocess.run(["bash", "-c", driver], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertTrue((dest / "model.bin").is_file(), "the second rollback deleted the old file")
+                self.assertEqual((dest / "model.bin").read_bytes(), b"old")
+                self.assertIn("restored to its previous files", r.stderr)
+                self.assertNotIn("could not be fully undone", r.stderr)
+
+    def test_a_destination_directory_is_refused_before_anything_changes(self):
+        (self.dest() / "tokenizer.json").unlink()
+        (self.dest() / "tokenizer.json").mkdir()
+        (self.dest() / "tokenizer.json" / "keep").write_bytes(b"x")
+        r = self.run_fetch(self.MODEL)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("tokenizer.json is a directory", r.stderr)
+        self.assertIn("was not modified", r.stderr)
+        self.assertEqual((self.dest() / "model.bin").read_bytes(), b"old weights")
+        self.assertEqual([p.name for p in (self.dest() / "tokenizer.json").iterdir()], ["keep"])
+        self.assertEqual(self.leftovers(), [])
+
+    def test_a_leftover_work_directory_is_reported_and_kept(self):
+        # What a rollback that could not finish leaves behind.
+        stale = self.dest() / ".esp32ai-install-AbC123"
+        (stale / "old").mkdir(parents=True)
+        (stale / "old" / "model.bin").write_bytes(b"only copy")
+        for expected in (0, 1):
+            if expected:
+                self.publish(self.NEW, pins={"model.bin": b"other weights", "tokenizer.json": b"new tokenizer"})
+            with self.subTest(returncode=expected):
+                r = self.run_fetch(self.MODEL)
+                self.assertEqual(r.returncode, expected, r.stderr)
+                self.assertIn(f"warning: {Path('artifacts') / self.MODEL / stale.name} is left over", r.stderr)
+                self.assertEqual((stale / "old" / "model.bin").read_bytes(), b"only copy")
+
+    def test_a_successful_replacement_leaves_nothing_temporary(self):
+        r = self.run_fetch(self.MODEL)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        after = self.snapshot()
+        self.assertEqual(sorted(after), ["metadata.json", "model.bin", "tokenizer.json"])
+        self.assertEqual(after["model.bin"], b"new weights!")
+        self.assertEqual(after["tokenizer.json"], b"new tokenizer")
+        self.assertEqual(self.leftovers(), [])
 
 
 class TestStagingCleanup(FetchCase):

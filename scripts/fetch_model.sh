@@ -22,7 +22,8 @@ hash, so it is parsed and cross-checked against those same pins instead. Only
 then is anything installed into artifacts/<model>/.
 
 Nothing is installed unless every check passes, so a failed or partial download
-leaves whatever is already in artifacts/ untouched.
+leaves whatever is already in artifacts/ untouched. The install itself is all or
+nothing: if it fails or is interrupted part way, the previous files are restored.
 
 Then flash with:
   scripts/deploy.sh <tinystories|barista|fly>
@@ -106,7 +107,85 @@ cleanup() {
   [ -d "$STAGING" ] || return 0
   rm -rf -- "$STAGING" || echo "could not remove staging directory: $STAGING" >&2
 }
-trap cleanup EXIT
+
+# The install below records each step before taking it, so an interrupted or
+# failed install can be undone: "aside NAME" moves the previous file into
+# $WORK/old, "new NAME" puts the new file in place. Undoing checks which renames
+# really happened. WORK is created inside $DEST so every step is a rename.
+# Rollback has one entry point, on_exit, which ignores further signals first.
+WORK=""
+WORK_PATTERN=""
+INSTALLING=0
+STEPS=()
+
+# Undoes the recorded steps, newest first, and runs at most once: each undone
+# step is marked "done", so no second pass could delete a file it put back. It
+# reports success only when every step was undone and $WORK/old is empty again;
+# otherwise $WORK is kept, because it may hold the only copies.
+restore() {
+  local i step name ok=1
+  [ "$INSTALLING" -eq 1 ] || return 0
+  INSTALLING=0
+  i=${#STEPS[@]}
+  while [ "$i" -gt 0 ]; do
+    i=$((i - 1))
+    step=${STEPS[$i]}
+    name=${step#* }
+    case "$step" in
+      "new "*)
+        if [ ! -e "$WORK/new/$name" ]; then
+          rm -f -- "$DEST/$name" || { ok=0; continue; }
+        fi ;;
+      "aside "*)
+        if [ -e "$WORK/old/$name" ] || [ -L "$WORK/old/$name" ]; then
+          mv -f -- "$WORK/old/$name" "$DEST/$name" || { ok=0; continue; }
+        fi ;;
+      *) continue ;;
+    esac
+    STEPS[$i]=done
+  done
+  if [ "$ok" -eq 1 ] && [ -z "$(ls -A -- "$WORK/old" 2>/dev/null)" ]; then
+    echo "install failed; $DEST/ was restored to its previous files" >&2
+    return 0
+  fi
+  echo "install failed and could not be fully undone: $DEST/ is not a consistent install." >&2
+  echo "The previous files that could not be put back are in $WORK/old/." >&2
+  WORK=""
+  return 1
+}
+
+remove_work() {
+  [ -n "$WORK" ] || return 0
+  case "$WORK" in
+    $WORK_PATTERN) ;;
+    *) echo "not removing unexpected install path: $WORK" >&2; return 0 ;;
+  esac
+  [ -d "$WORK" ] || return 0
+  rm -rf -- "$WORK" || echo "could not remove install directory: $WORK" >&2
+}
+
+on_exit() {
+  # A second interrupt must not cut a rollback short.
+  trap '' HUP INT TERM
+  if [ "$INSTALLING" -eq 1 ]; then
+    restore || true
+  fi
+  remove_work
+  cleanup
+}
+trap on_exit EXIT
+# Interrupts exit through the EXIT trap, so a half-done install is undone.
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# A work directory left by an install whose rollback failed may hold the only
+# copies of earlier files. It is never removed automatically; say so every run.
+for stale in "$DEST"/.esp32ai-install-*; do
+  [ -d "$stale" ] || continue
+  echo "warning: $stale is left over from an install that could not be undone;" >&2
+  echo "  it may hold the only copies of earlier files. Check it, then remove it by hand." >&2
+done
 
 echo "=== download $REPO ==="
 hf download "$REPO" "${NAMES[@]}" --local-dir "$STAGING" 2>&1 | tail -3
@@ -168,11 +247,50 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
-# Everything verified: install. Existing files are replaced only at this point.
+# Everything verified: install, all or nothing. Existing files are replaced only
+# at this point. mv onto a directory would move the file inside it instead.
 mkdir -p "$DEST"
 for name in "${NAMES[@]}"; do
-  mv "$STAGING/$name" "$DEST/$name"
+  if [ -d "$DEST/$name" ]; then
+    echo "$DEST/$name is a directory; remove or rename it and fetch again. $DEST/ was not modified" >&2
+    exit 1
+  fi
 done
+
+# Copy everything next to its destination first: staging may be on another
+# filesystem, where a copy can fail part way. Until the renames below, $DEST/
+# only gains the hidden work directory.
+WORK_PATTERN="$DEST/.esp32ai-install-??????"
+WORK=$(mktemp -d "$DEST/.esp32ai-install-XXXXXX") || {
+  echo "could not create a work directory in $DEST/; $DEST/ was not modified" >&2
+  WORK=""
+  exit 1
+}
+case "$WORK" in
+  $WORK_PATTERN) ;;
+  *) echo "unexpected install path: $WORK; $DEST/ was not modified" >&2; WORK=""; exit 1 ;;
+esac
+mkdir "$WORK/new" "$WORK/old"
+for name in "${NAMES[@]}"; do
+  if ! cp -- "$STAGING/$name" "$WORK/new/$name"; then
+    echo "could not copy $name next to $DEST/; $DEST/ was not modified" >&2
+    exit 1
+  fi
+done
+
+# Only renames within $DEST from here: move each previous file aside, then put
+# the new one in its place. A failure or signal exits, and on_exit undoes every
+# step taken so far.
+INSTALLING=1
+for name in "${NAMES[@]}"; do
+  if [ -e "$DEST/$name" ] || [ -L "$DEST/$name" ]; then
+    STEPS+=("aside $name")
+    mv -f -- "$DEST/$name" "$WORK/old/$name" || exit 1
+  fi
+  STEPS+=("new $name")
+  mv -f -- "$WORK/new/$name" "$DEST/$name" || exit 1
+done
+INSTALLING=0
 
 echo
 echo "installed into $DEST/:"
